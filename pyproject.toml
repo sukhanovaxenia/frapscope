@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frapscope"
+version = "0.1.0"
+description = "FRAP recovery analysis for live-cell imaging: extraction from Leica .lif archives, double normalisation, mobile-fraction estimation and planned-contrast statistics"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Xenia Sukhanova", email = "sukhanovaxenia@gmail.com" }]
+keywords = ["FRAP", "fluorescence recovery", "live-cell imaging", "biocondensates", "microscopy"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "pandas>=2.0",
+  "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
+
+[project.scripts]
+frapscope = "frapscope.cli:main"
+
+[project.urls]
+Source = "https://github.com/sukhanovaxenia/frapscope"
+Issues = "https://github.com/sukhanovaxenia/frapscope/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+  "integration: writes fixture data and exercises the loader-to-statistics path",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
