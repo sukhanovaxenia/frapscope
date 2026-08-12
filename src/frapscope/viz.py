@@ -1,5 +1,5 @@
 """
-frap.viz — visualization applied uniformly to any extraction route.
+frapscope.viz — visualization applied uniformly to any extraction route.
 
 Two normalized representations and one raw track:
   * normalized recovery + parameter boxplots  (kinetic readout; cross-comparable)
@@ -30,17 +30,28 @@ pre-bleach plateau departs from unity, because both inject method-dependent
 bias into an otherwise biological contrast.
 """
 
-from pathlib import Path
 import csv
-import numpy as np
+from pathlib import Path
+
 import matplotlib
+import numpy as np
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from .core import (drop_supraceiling, fit_frap_curve, interpolate_to_common_timepoints,
-                   compute_metrics, replicate_metrics, align_to_bleach,
-                   prebleach_qc, mean_sem, gap_mask, renormalise_to_prebleach,
-                   trim_to_coverage)
+from .core import (
+    align_to_bleach,
+    compute_metrics,
+    drop_supraceiling,
+    fit_frap_curve,
+    gap_mask,
+    interpolate_to_common_timepoints,
+    mean_sem,
+    prebleach_qc,
+    renormalise_to_prebleach,
+    replicate_metrics,
+    trim_to_coverage,
+)
 
 COMPARISON_COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E8505B',
                      '#9C27B0', '#00BCD4', '#795548', '#607D8B']

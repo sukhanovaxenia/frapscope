@@ -15,8 +15,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from frap.core import detect_bleach_index, median_iqr
-from frap.stats import _min_p, holm
+from frapscope.core import detect_bleach_index, median_iqr
+from frapscope.stats import _min_p, holm
 
 
 # --------------------------------------------------------------------------- #

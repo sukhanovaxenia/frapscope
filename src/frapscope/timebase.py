@@ -1,5 +1,5 @@
 """
-frap.timebase — common post-bleach time base across conditions.
+frapscope.timebase — common post-bleach time base across conditions.
 
 Motivation
 ----------
@@ -27,12 +27,13 @@ with ``time``, ``intensity``, ``intensity_raw``, ``provenance``), *before*
 
 Usage
 -----
-    from frap import build_all_data
-    from frap.config import CONDITIONS
-    from frap.timebase import (acquisition_report, harmonise,
-                               invariance_report, sampling_bias_report)
+    from frapscope import build_all_data
+    from frapscope.config import load_conditions
+    from frapscope.timebase import (acquisition_report, harmonise,
+                                    invariance_report, sampling_bias_report)
 
-    datasets = {c.display: build_all_data(c) for c in CONDITIONS}
+    conditions = load_conditions("examples/config_ribosomal.py")
+    datasets = {c.display: build_all_data(c) for c in conditions}
 
     print(acquisition_report(datasets))        # what was actually acquired
     print(invariance_report(datasets))         # does truncation change the ranking?
@@ -45,12 +46,12 @@ Usage
 from __future__ import annotations
 
 import copy
-from typing import Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 import numpy as np
 
 try:                                    # optional: use the package's own fitter
-    from .core import fit_frap_curve, align_to_bleach          # type: ignore
+    from .core import align_to_bleach, fit_frap_curve  # type: ignore
 except Exception:                                              # pragma: no cover
     fit_frap_curve = None                                      # type: ignore
     align_to_bleach = None                                     # type: ignore
@@ -62,8 +63,8 @@ __all__ = [
     "harmonise", "invariance_report", "sampling_bias_report",
 ]
 
-AllData = List[dict]
-Datasets = Dict[str, AllData]
+AllData = list[dict]
+Datasets = dict[str, AllData]
 
 
 # --------------------------------------------------------------------------- #
@@ -124,7 +125,7 @@ def _t_half(t: np.ndarray, y: np.ndarray) -> float:
             return float(r)
         except Exception:
             return float("nan")
-    from scipy.optimize import curve_fit                      # local import
+    from scipy.optimize import curve_fit  # local import
     t = np.asarray(t, float); y = np.asarray(y, float)
     if len(t) < 4:
         return float("nan")
@@ -143,7 +144,7 @@ def _t_half(t: np.ndarray, y: np.ndarray) -> float:
 
 def _mean_curve(all_data: AllData, n_grid: int = 200,
                 min_coverage: float = 0.75
-                ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Coverage-masked mean of the aligned replicates on a shared grid.
 
     The grid ends at the coverage quantile, not at the shortest replicate.
@@ -283,7 +284,7 @@ def truncate(all_data: AllData, window: float, min_points: int = 3,
 
 
 def resample_to_grid(all_data: AllData, dt: float,
-                     window: Optional[float] = None,
+                     window: float | None = None,
                      min_points: int = 3) -> AllData:
     """Re-sample replicates onto a shared ``dt`` grid.
 
@@ -312,9 +313,9 @@ def resample_to_grid(all_data: AllData, dt: float,
     return out
 
 
-def harmonise(datasets: Datasets, window: Optional[float] = None,
-              dt: Optional[float] = None, rule: str = "min",
-              min_coverage: float = 0.75) -> Tuple[Datasets, float]:
+def harmonise(datasets: Datasets, window: float | None = None,
+              dt: float | None = None, rule: str = "min",
+              min_coverage: float = 0.75) -> tuple[Datasets, float]:
     """Put every condition on a common post-bleach window (and optionally grid).
 
     Returns ``(datasets, window)`` containing only conditions that retain at
@@ -394,7 +395,7 @@ def _measured_f_pre(all_data: AllData, n_pre: int = 3) -> float:
     return v if np.isfinite(v) and v > 0 else 1.0
 
 
-def invariance_report(datasets: Datasets, window: Optional[float] = None
+def invariance_report(datasets: Datasets, window: float | None = None
                       ) -> str:
     """Mobile fraction on the native window vs the common window.
 

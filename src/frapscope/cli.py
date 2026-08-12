@@ -20,8 +20,8 @@ invocation, which imports a second copy of the package under a different name.
 import argparse
 from pathlib import Path
 
-from frapscope.config import ConfigError, load_conditions
 from frapscope import run
+from frapscope.config import ConfigError, load_conditions
 from frapscope.viz import PLOT_MODES
 
 # Relative by default: an absolute path here pointed into one machine's
@@ -80,7 +80,7 @@ def main():
     try:
         conditions = load_conditions(args.config)
     except ConfigError as exc:
-        raise SystemExit(f"configuration error: {exc}")
+        raise SystemExit(f"configuration error: {exc}") from None
     print(f"Conditions: {', '.join(c.display + ' [' + c.loader + ']' for c in conditions)}")
     print(f"Plot mode : {args.plot_mode}")
     print(f"Output: {args.out}")

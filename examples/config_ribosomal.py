@@ -16,7 +16,7 @@ The archives are not distributed with this repository. See README, "Data".
 from frapscope.config import Condition
 
 #: Directory holding the per-protein subfolders of .lif archives.
-DATA = "../../FRAP"
+DATA = "./data"
 
 
 CONDITIONS = [
@@ -49,8 +49,8 @@ CONDITIONS = [
     # is a qualitative mobility reference and must not enter the statistics.
     # Excluding a condition that is absent from the config looks identical, on
     # the command line, to excluding one that is present.
-    Condition(key="EGFP", display="GFP", loader="image_digitized",
-              source=f"{DATA}/EGFP"),
+    # Condition(key="EGFP", display="GFP", loader="image_digitized",
+    #           source=f"{DATA}/EGFP"),
 ]
 
 # ---------------------------------------------------------------------------

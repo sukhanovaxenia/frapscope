@@ -1,0 +1,110 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Monthly, so a break caused by a new NumPy, SciPy or Matplotlib release
+  # surfaces on a quiet week rather than the day someone needs to rerun an
+  # analysis. Scientific dependencies move under a package that is not itself
+  # changing, which is exactly the failure a push-triggered CI never catches.
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Do not stop the matrix on one failure: a break on 3.12 alone is a
+      # different diagnosis from a break everywhere, and cancelling the other
+      # jobs hides which it is.
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      # Run standalone as well as through the test suite. A reader following
+      # docs/reproducing.md invokes it directly, so it has to work outside the
+      # conftest fixture that normally calls it.
+      - name: Generate fixtures
+        run: python -m tests.fixtures.make_fixtures --out /tmp/frap_fixtures
+
+      - name: Fast tests
+        run: pytest -m "not integration"
+
+      - name: Full suite
+        run: pytest --cov=frapscope --cov-report=term-missing
+
+  build:
+    name: wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          pip install build twine
+          python -m build
+
+      # twine check catches metadata a build will accept and PyPI will reject —
+      # a malformed long_description most often. Cheaper here than at upload.
+      - name: Check metadata
+        run: twine check dist/*
+
+      # The package must contain exactly one top-level name. Discovery under
+      # src/ picks up any directory, so a scratch folder left beside the package
+      # ships as a second module; this happened once and shipped `backlog`.
+      - name: Assert the wheel contains only frapscope
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          whl = sorted(glob.glob("dist/*.whl"))[-1]
+          tops = {n.split("/")[0] for n in zipfile.ZipFile(whl).namelist()}
+          pkgs = {t for t in tops if not t.endswith(".dist-info")}
+          assert pkgs == {"frapscope"}, f"unexpected top-level names: {sorted(pkgs)}"
+          print("wheel contains only:", sorted(pkgs))
+          PY
+
+      # Install from the built wheel in a clean environment. `pip install -e .`
+      # in the test job passes even when a module is missing from the package,
+      # because the source tree is on the path; this does not.
+      - name: Smoke-test the installed wheel
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet dist/*.whl
+          /tmp/venv/bin/frapscope --help > /dev/null
+          /tmp/venv/bin/python -c "
+          import frapscope
+          from frapscope import loaders, core, stats, timebase, viz, config
+          for fn in ('load_lif', 'load_roi_csv', 'load_image_digitized'):
+              assert callable(getattr(loaders, fn)), fn
+          print('installed package imports and the entry point runs')
+          "

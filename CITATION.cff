@@ -1,11 +1,31 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-authors:
-- family-names: "Sukhanova"
-  given-names: "Xenia"
-  orcid: "https://orcid.org/0000-0001-7022-0832"
-title: "FRAP recovery analysis for live-cell imaging"
+title: "frapscope: fluorescence recovery after photobleaching for live-cell imaging"
+abstract: >-
+  Extraction of FRAP recovery series directly from Leica .lif archives, double
+  normalisation against an unbleached reference, point-based mobile-fraction
+  estimation from a measured plateau, and comparison of conditions under a
+  contrast family fixed by experimental design. Replicates recovering above
+  their own pre-bleach level are excluded as physically impossible rather than
+  clamped, and the smallest p-value the exact rank null can return at the given
+  replicate counts is reported alongside the observed one.
+type: software
 version: 0.1.0
-doi: .
-date-released: .
-url: "https://github.com/sukhanovaxenia/frapscope"
+date-released: "2026-08-11"
+license: MIT
+repository-code: "https://github.com/sukhanovaxenia/frapscope"
+authors:
+  - family-names: Sukhanova
+    given-names: Xenia
+    orcid: "https://orcid.org/0000-0001-7022-0832"
+    affiliation: "Laboratory of Amyloid Biology, Saint Petersburg State University"
+keywords:
+  - FRAP
+  - fluorescence recovery after photobleaching
+  - live-cell imaging
+  - biomolecular condensates
+  - protein aggregation
+  - bioimage analysis
+# A `preferred-citation:` block pointing at the accompanying manuscript goes
+# here once that manuscript has a DOI. Adding it before acceptance announces
+# the work ahead of it — see SETUP.md.

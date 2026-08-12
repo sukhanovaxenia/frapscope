@@ -1,5 +1,5 @@
 """
-frap — a FRAP analysis library factored on the `all_data` contract.
+frapscope — a FRAP analysis library factored on the `all_data` contract.
 
 Architecture
 ------------
@@ -19,19 +19,23 @@ window every condition covers.
 
 Public API
 ----------
-    from frap import build_all_data, run
-    from frap.loaders import LOADER_REGISTRY
-    from frap.config import Condition, CONDITIONS
+    from frapscope import build_all_data, run
+    from frapscope.loaders import LOADER_REGISTRY
+    from frapscope.config import Condition, load_conditions
 """
 
 from pathlib import Path
 
-from .loaders import LOADER_REGISTRY
-from .viz import plot_frap_summary, plot_intensity_raw, compare_conditions
 from .core import drop_supraceiling
+from .loaders import LOADER_REGISTRY
 from .stats import compare_mobile_fractions
-from .timebase import (acquisition_report, invariance_report,
-                       sampling_bias_report, harmonise)
+from .timebase import (
+    acquisition_report,
+    harmonise,
+    invariance_report,
+    sampling_bias_report,
+)
+from .viz import compare_conditions, plot_frap_summary, plot_intensity_raw
 
 __all__ = ["build_all_data", "run"]
 

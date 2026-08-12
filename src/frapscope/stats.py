@@ -1,5 +1,5 @@
 """
-frap.stats — cross-condition comparison of mobile fractions.
+frapscope.stats — cross-condition comparison of mobile fractions.
 
 Until now the p-values quoted in the manuscript were computed outside the
 pipeline, which means they were not reproducible from the same command that
@@ -43,9 +43,9 @@ therefore not independent.
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable, Sequence
 from itertools import combinations
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -77,7 +77,7 @@ def _hedges_g(a: np.ndarray, b: np.ndarray) -> float:
     return float((a.mean() - b.mean()) / sp * (1 - 3 / (4 * (na + nb) - 9)))
 
 
-def _welch(a: np.ndarray, b: np.ndarray) -> Tuple[float, float, float]:
+def _welch(a: np.ndarray, b: np.ndarray) -> tuple[float, float, float]:
     from scipy import stats as st
     r = st.ttest_ind(a, b, equal_var=False)
     va, vb = a.var(ddof=1) / a.size, b.var(ddof=1) / b.size
@@ -85,7 +85,7 @@ def _welch(a: np.ndarray, b: np.ndarray) -> Tuple[float, float, float]:
     return float(r.statistic), float(df), float(r.pvalue)
 
 
-def _mwu(a: np.ndarray, b: np.ndarray) -> Tuple[float, float]:
+def _mwu(a: np.ndarray, b: np.ndarray) -> tuple[float, float]:
     from scipy import stats as st
     r = st.mannwhitneyu(a, b, alternative="two-sided")
     return float(r.statistic), float(r.pvalue)
@@ -98,8 +98,8 @@ def _min_p(na: int, nb: int) -> float:
     return min(1.0, 2.0 / total)
 
 
-def planned_contrasts(names: Iterable[str], control: Optional[str] = None,
-                      exclude: Iterable[str] = ()) -> List[Tuple[str, str]]:
+def planned_contrasts(names: Iterable[str], control: str | None = None,
+                      exclude: Iterable[str] = ()) -> list[tuple[str, str]]:
     """The contrast family to correct over.
 
     Holm's correction divides the available significance among the tests in the
@@ -126,12 +126,12 @@ def planned_contrasts(names: Iterable[str], control: Optional[str] = None,
     return [(n, control) for n in ns if n != control]
 
 
-def compare_mobile_fractions(summaries: Dict[str, dict],
-                             out_dir: Optional[Path] = None,
-                             contrasts: Optional[Iterable[Tuple[str, str]]] = None,
-                             control: Optional[str] = None,
+def compare_mobile_fractions(summaries: dict[str, dict],
+                             out_dir: Path | None = None,
+                             contrasts: Iterable[tuple[str, str]] | None = None,
+                             control: str | None = None,
                              exclude: Iterable[str] = (),
-                             qc_only: bool = False) -> List[dict]:
+                             qc_only: bool = False) -> list[dict]:
     """Pairwise tests on per-replicate mobile fractions.
 
     ``summaries`` is the dict returned by :func:`frap.run`; each value must

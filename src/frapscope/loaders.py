@@ -1,5 +1,5 @@
 """
-frap.loaders — interchangeable extractors, all emitting the `all_data` contract.
+frapscope.loaders — interchangeable extractors, all emitting the `all_data` contract.
 
 The all_data contract (the library's invariant interface):
     all_data : list[dict] with keys
@@ -24,7 +24,6 @@ from collections import defaultdict
 
 import numpy as np
 from scipy import ndimage
-
 
 # ---------------------------------------------------------------- .lif loader
 
@@ -358,6 +357,7 @@ def load_image_digitized(source, x_range=(0, 60), y_range=(0, 250), **_):
     Prefer load_lif (lossless) or load_roi_csv (honest manual path)."""
     import warnings
     from pathlib import Path
+
     from PIL import Image
     warnings.warn("load_image_digitized is deprecated and lossy; prefer load_lif/load_roi_csv.",
                   stacklevel=2)

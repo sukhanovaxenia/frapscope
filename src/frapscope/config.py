@@ -58,7 +58,7 @@ class Condition:
     #: the protein disagree — this panel has one such case and it cost weeks.
     key: str | None = None
 
-    def resolve(self, base: Path) -> "Condition":
+    def resolve(self, base: Path) -> Condition:
         """Return a copy with ``source`` resolved against ``base``."""
         p = Path(self.source)
         return Condition(

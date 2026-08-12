@@ -1,7 +1,7 @@
 """
-frap.core — extraction-agnostic analysis of FRAP recovery.
+frapscope.core — extraction-agnostic analysis of FRAP recovery.
 
-Everything here operates on the `all_data` contract (see frap.loaders): a list
+Everything here operates on the `all_data` contract (see frapscope.loaders): a list
 of per-replicate dicts with keys `time` (s, time-since-bleach; pre-bleach
 negative), `intensity` (full-scale double-normalized, pre-bleach -> 1.0), and
 `intensity_raw` (mean ROI fluorescence in detector a.u.).
@@ -499,7 +499,7 @@ def compute_metrics(summary, n_pre=3, n_plat=3):
         return dict(f_pre=f_pre, f_min=f_min, f_plat=f_plat,
                     bleach_depth_=bd, mobile_fraction_=mf, immobile_fraction_=100 - mf,
                     mf_per_rep=summary["mf_per_rep"], bd_per_rep=summary["bd_per_rep"])
-    t, y = summary["common_time"], summary["mean"]
+    y = summary["mean"]
     i = detect_bleach_index(y)
     f_pre = float(np.nanmean(y[: min(n_pre, max(i, 1))]))
     f_min = float(y[i]); f_plat = float(np.nanmean(y[-n_plat:]))

@@ -9,7 +9,12 @@ description = "FRAP recovery analysis for live-cell imaging: extraction from Lei
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
-authors = [{ name = "Xenia Sukhanova", email = "sukhanovaxenia@gmail.com" }]
+authors = [
+  { name = "Xenia Sukhanova", email = "sukhanovaxenia@gmail.com" },
+  ]
+maintainers = [
+    { name = "Xenia Sukhanova", email = "sukhanovaxenia@gmail.com" },
+]
 keywords = ["FRAP", "fluorescence recovery", "live-cell imaging", "biocondensates", "microscopy"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -33,8 +38,10 @@ dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
 frapscope = "frapscope.cli:main"
 
 [project.urls]
-Source = "https://github.com/sukhanovaxenia/frapscope"
+Homepage = "https://github.com/sukhanovaxenia/frapscope"
+Repository = "https://github.com/sukhanovaxenia/frapscope"
 Issues = "https://github.com/sukhanovaxenia/frapscope/issues"
+Changelog = "https://github.com/sukhanovaxenia/frapscope/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -52,4 +59,13 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
-ignore = ["E501"]
+ignore = [
+  "E501",
+  # Compact one-liners such as `f_min = ...; f_plat = ...` in the numerical
+  # code. Style only; splitting them would bury the analysis diff in churn.
+  "E702",
+  # zip() without strict=. The existing calls predate the check, and
+  # strict=True raises where lengths differ, so enabling it changes behaviour.
+  # Review each call before removing this line.
+  "B905",
+]

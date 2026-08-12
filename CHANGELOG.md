@@ -1,0 +1,52 @@
+# Changelog
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
+versioning follows [Semantic Versioning](https://semver.org/).
+
+A release that changes a number a previous version reported opens with a
+**Results affected** section.
+
+## [0.1.0] — 2026-08-11
+
+First public release. The package existed as analysis scripts before this;
+the history below records the corrections made while the analysis was in
+progress, because each altered a value that had already been written down.
+
+### Results affected
+
+| Quantity | Before | After | Cause |
+|---|---|---|---|
+| Control mobile fraction | 41.2 % | 21.9 % | replicates recovering above their own pre-bleach level were included |
+| Mobile fraction, resampled traces | down to −75 000 % | correct | bleach frame taken as the global minimum with a frame-count guard |
+| Contrast p-values | corrected over 10 pairs | corrected over the pre-specified 3 | family size was not fixed by design |
+
+### Added
+
+- Extraction directly from Leica `.lif` archives, replacing digitisation of
+  exported TIFF images by colour thresholding.
+- `stats.py`: Welch and Mann-Whitney reported together with Hedges' *g*, Holm
+  correction over a pre-specified family, and `_min_p`, the smallest two-sided
+  *p* the exact rank null can return at the given replicate counts.
+- `timebase.py`: acquisition, invariance and sampling-bias reports; native-window
+  reporting with a verified ordering under truncation to a common window.
+- `median_iqr` alongside mean and SEM, since per-replicate mobile fractions are
+  right-skewed.
+- Regression tests for every quantity listed under "Results affected".
+
+### Changed
+
+- Bleach frame identified as the largest fall below the running maximum rather
+  than as the global minimum with a frame-count guard.
+- Plateau window expressed as a fraction of the observation window rather than a
+  fixed number of trailing frames, so the estimate is independent of sampling
+  density.
+- Supra-ceiling exclusion applied once in `run()` before plotting, QC and
+  testing, so every consumer sees the same set of replicates.
+
+### Known limitations
+
+- The loaders are not exercised in CI, because the microscopy data are not
+  distributable. CI asserts only that the entry points exist and import.
+- `load_image_digitized` is retained for provenance and should not be used for
+  new analysis; it recovers data points from rendered figures by colour
+  thresholding, with an estimated uncertainty of ±1–3 % per axis.
