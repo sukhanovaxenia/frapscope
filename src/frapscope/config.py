@@ -37,8 +37,8 @@ class Condition:
         containing the config file, not the working directory, so a config and
         its data can be moved together.
     loader
-        Key into ``frapscope.loaders.LOADER_REGISTRY``: ``lif``, ``roi_csv`` or
-        ``image_digitized``.
+        Key into ``frapscope.loaders.LOADER_REGISTRY``: ``lif``, ``leica_csv``,
+        ``roi_csv`` or ``image_digitized``.
     loader_kwargs
         Extraction settings passed through to the loader. Leave a setting out
         rather than restating its default: a value that appears on two

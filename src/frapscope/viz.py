@@ -152,7 +152,9 @@ def plot_frap_summary(all_data, name, output_dir, bleach_time=0.0,
     fig.tight_layout(); fig.savefig(output_dir / f"{name}_frap_curves.png", dpi=150); plt.close(fig)
 
     # --- fits: always on the original traces; the fitter finds the bleach --- #
-    fits = [p for p in (fit_frap_curve(d["time"], d["intensity"]) for d in all_data) if p]
+    fits = [p for p in (fit_frap_curve(d["time"], d["intensity"],
+                                     bleach_time=0.0 if d.get("bleach_at_t0") else None)
+                      for d in all_data) if p]
     if len(fits) >= 2:
         th = [p["t_half"] for p in fits]; mb = [p["mobile_fraction"] for p in fits]
         pl = [p["plateau"] for p in fits]

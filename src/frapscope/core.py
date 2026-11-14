@@ -84,6 +84,30 @@ def detect_bleach_index(intensity, min_post=1, min_drop_frac=0.5):
     return int(np.nanargmin(cand))
 
 
+def bleach_index(record):
+    """Bleach frame of one replicate record.
+
+    A loader that read the bleach from the acquisition rather than inferring it
+    marks the record with ``bleach_at_t0=True``: its time axis is zeroed on the
+    first post-bleach frame, so the bleach is the first sample at t >= 0. Every
+    other record falls through to :func:`detect_bleach_index`, unchanged.
+
+    The distinction matters for single-normalised traces. Without a reference
+    ROI, acquisition photobleaching keeps lowering a slowly exchanging ROI after
+    the bleach, and its global post-bleach minimum moves to the end of the
+    trace. The running-maximum criterion then places the bleach there and
+    reports a mobile fraction near zero from the wrong frame -- most often for
+    the least mobile cells, which is the population a FRAP comparison is about.
+    Excluding those replicates instead would bias the mobile fraction upward.
+    """
+    if record.get("bleach_at_t0"):
+        t = np.asarray(record["time"], float)
+        idx = np.flatnonzero(t >= 0)
+        if idx.size:
+            return int(idx[0])
+    return detect_bleach_index(record["intensity"])
+
+
 def align_to_bleach(all_data, crop=False):
     """Re-zero every replicate's clock on its own detected bleach frame.
 
@@ -99,7 +123,7 @@ def align_to_bleach(all_data, crop=False):
     for d in all_data:
         t = np.asarray(d["time"], float)
         y = np.asarray(d["intensity"], float)
-        i = detect_bleach_index(y)
+        i = bleach_index(d)
         e = dict(d)
         sl = slice(i, None) if crop else slice(None)
         e["time"] = t[sl] - t[i]
@@ -128,7 +152,7 @@ def prebleach_plateau(all_data, n_pre=3):
     vals = []
     for d in all_data:
         y = np.asarray(d["intensity"], float)
-        i = detect_bleach_index(y)
+        i = bleach_index(d)
         pre = y[:i]
         if pre.size == 0:
             vals.append(np.nan)
@@ -162,7 +186,7 @@ def renormalise_to_prebleach(all_data, n_pre=3):
     out = []
     for d in all_data:
         y = np.asarray(d["intensity"], float)
-        i = detect_bleach_index(y)
+        i = bleach_index(d)
         pre = y[:i]
         f = float(np.nanmean(pre[: min(n_pre, pre.size)])) if pre.size else 1.0
         e = dict(d)
@@ -401,7 +425,7 @@ def drop_supraceiling(all_data, n_plat=3, n_pre=3, plat_frac=0.2,
     keep, dropped = [], []
     for d in all_data:
         y = np.asarray(d["intensity"], float)
-        i = detect_bleach_index(y)
+        i = bleach_index(d)
         pre, post = y[:i], y[i:]
         if pre.size == 0 or post.size == 0:
             keep.append(d)
@@ -443,7 +467,7 @@ def replicate_metrics(all_data, n_plat=3, n_pre=3, plat_frac=0.2,
     mf, bd, pres, mins, plats, excluded = [], [], [], [], [], []
     for d in all_data:
         y = np.asarray(d["intensity"], float)
-        i = detect_bleach_index(y)
+        i = bleach_index(d)
         pre, post = y[:i], y[i:]
         if pre.size == 0 or post.size == 0:
             continue

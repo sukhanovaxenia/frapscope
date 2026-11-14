@@ -6,6 +6,30 @@ versioning follows [Semantic Versioning](https://semver.org/).
 A release that changes a number a previous version reported opens with a
 **Results affected** section.
 
+## [Unreleased]
+
+### Added
+
+- `leica_csv` loader for LAS X Quantify ROI exports, for acquisitions whose
+  `.lif` was not kept. Reads both regional dialects, takes timestamps from the
+  file, and places the bleach at the frames LAS X leaves unmeasured. Double
+  normalisation when reference and background ROIs are exported, single
+  otherwise, with distinct provenance so mixed comparisons are flagged.
+- `core.bleach_index(record)`: uses the loader's bleach when the record carries
+  `bleach_at_t0`, and `detect_bleach_index` otherwise.
+
+### Fixed
+
+- `load_lif` accepted only a file, while the configuration documents a folder
+  of archives and the example config passes one; a folder failed as "loader
+  failed". A folder now loads every `.lif` in it, with replicate names prefixed
+  by the archive stem when there are several.
+- On single-normalised traces of slowly exchanging cells, acquisition
+  photobleaching moves the post-bleach minimum to the end of the trace, and
+  re-detection placed the bleach there (frame 20 instead of 2 in one replicate).
+  Records with a recorded bleach are no longer re-detected. Records from the
+  `.lif`, `roi_csv` and `image_digitized` routes are unaffected.
+
 ## [0.1.0] — 2026-08-11
 
 First public release. The package existed as analysis scripts before this;

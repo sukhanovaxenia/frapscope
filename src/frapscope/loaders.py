@@ -9,9 +9,14 @@ The all_data contract (the library's invariant interface):
         intensity_raw : np.ndarray  mean ROI fluorescence, detector a.u.
         provenance    : str   which loader produced it (for mix-method warnings)
         centre        : tuple|None  detected bleach-spot pixel (.lif only)
+        bleach_at_t0  : bool, optional  the bleach was read from the file, not
+                        inferred; t = 0 is the first post-bleach frame and core
+                        uses it instead of re-detecting (core.bleach_index)
 
-Three loaders are provided:
+Four loaders are provided:
     load_lif            preferred; lossless extraction from raw Leica .lif
+    load_leica_csv      LAS X Quantify export: per-frame ROI means with real
+                        timestamps, for acquisitions whose .lif was not kept
     load_roi_csv        honest manual path: ImageJ/easyFRAP ROI tables + timing
     load_image_digitized  DEPRECATED legacy plot-digitizer (lossy; see warning)
 
@@ -21,6 +26,7 @@ Register additional loaders in LOADER_REGISTRY; the runner dispatches by name.
 import struct
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
 from scipy import ndimage
@@ -219,8 +225,37 @@ def _extract_single_series_lif(root, img, name, roi_radius_px, n_pre_min=2):
 
 
 def load_lif(source, roi_radius_px=6, single_series=True, **_):
-    """Lossless extraction from a Leica .lif. Each FRAP experiment -> one replicate."""
+    """Lossless extraction from Leica .lif. Each FRAP experiment -> one replicate.
+
+    ``source`` is a single archive or a directory of them. A directory is the
+    form the configuration documents, and before this it reached ``open()`` as
+    a path and failed with IsADirectoryError, which the runner reports only as
+    "loader failed". With several archives in one directory, replicate names are
+    prefixed with the archive stem, because LAS X numbers series from 1 in every
+    project and two archives would otherwise both contribute "FRAP 001".
+    """
+    from pathlib import Path
+    src = Path(source)
+    if src.is_dir():
+        files = sorted(src.glob("*.lif"), key=_natural_key)
+        if not files:
+            raise FileNotFoundError(f"no .lif archives in {src}")
+        out = []
+        for fp in files:
+            print(f"  [lif] {fp.name}")
+            recs = _load_lif_file(fp, roi_radius_px, single_series)
+            if len(files) > 1:
+                for r in recs:
+                    r["file"] = f"{fp.stem}/{r['file']}"
+            out.extend(recs)
+        return out
+    return _load_lif_file(src, roi_radius_px, single_series)
+
+
+def _load_lif_file(source, roi_radius_px=6, single_series=True):
+    """One .lif archive -> list of replicates. See :func:`load_lif`."""
     from readlif.reader import LifFile
+    source = str(source)
     root = ET.fromstring(_read_lif_xml(source))
     lif = LifFile(source)
     imgs = {img.info["name"]: img for img in lif.get_iter_image()}
@@ -285,12 +320,208 @@ def load_lif(source, roi_radius_px=6, single_series=True, **_):
             continue
         if rec is None:
             continue
-            continue
         all_data.append(rec)
         recovered += 1
     if recovered:
         print(f"  [lif] +{recovered} replicate(s) recovered as single-series "
               f"FRAP -> n = {len(all_data)}")
+    return all_data
+
+
+# ------------------------------------------------- LAS X Quantify CSV loader
+
+_TIME_UNITS = {"s": 1.0, "sec": 1.0, "ms": 1e-3, "min": 60.0}
+
+
+def _natural_key(path):
+    """Sort 12, 12_2, 12_10 in that order, not 12, 12_10, 12_2."""
+    import re
+    return [int(t) if t.isdigit() else t.lower()
+            for t in re.split(r"(\d+)", Path(path).name)]
+
+
+def _read_leica_quantify(path, channel=1):
+    """Parse one LAS X Quantify export into (time_s, {roi_name: values}).
+
+    The export is a small text table, preceded by a ``Channel N`` line for each
+    channel the ROIs were measured in::
+
+        Channel 1
+        Axis [s];ROI1 [];ROI2 []
+        0;98,27;61,40
+        2,598;95,98;61,22
+        5,703;;
+        ...
+
+    Two dialects occur, and which one depends on the regional settings of the
+    acquisition PC rather than on anything in LAS X: semicolon-separated with a
+    decimal comma, and comma-separated with a decimal point. The separator is
+    read from the header line and the decimal mark follows from it -- a comma
+    cannot be both, so a comma-separated file has a decimal point.
+
+    Empty cells are frames on which the ROI was not measured. In a FRAP protocol
+    these are the bleach-pulse frames, and they are returned as NaN rather than
+    dropped here so that the caller can see where the bleach was.
+    """
+    import re
+    raw = Path(path).read_bytes()
+    for enc in ("utf-8-sig", "utf-16", "cp1251"):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        raise ValueError(f"{Path(path).name}: cannot decode")
+
+    blocks, cur = {}, None
+    for line in text.replace("\r", "").split("\n"):
+        line = line.strip()
+        m = re.match(r"^channel\s*(\d+)", line, re.I)
+        if m:
+            cur = int(m.group(1))
+            blocks[cur] = []
+            continue
+        if not line:
+            continue
+        if cur is None:                      # export without a Channel line
+            cur = 1
+            blocks[cur] = []
+        blocks[cur].append(line)
+    if channel not in blocks:
+        raise ValueError(f"{Path(path).name}: no channel {channel}; "
+                         f"found {sorted(blocks)}")
+    lines = blocks[channel]
+    if not lines:
+        raise ValueError(f"{Path(path).name}: channel {channel} is empty")
+
+    header = lines[0]
+    sep = ";" if ";" in header else ("\t" if "\t" in header else ",")
+    decimal_comma = sep != ","
+    names = [re.sub(r"\s*\[.*?\]\s*$", "", h).strip() for h in header.split(sep)]
+    unit_m = re.search(r"\[(.*?)\]", header.split(sep)[0])
+    unit = (unit_m.group(1).strip().lower() if unit_m else "s") or "s"
+    if unit not in _TIME_UNITS:
+        raise ValueError(f"{Path(path).name}: first column is {header.split(sep)[0]!r}; "
+                         f"expected a time axis in s, ms or min")
+
+    def num(cell):
+        cell = cell.strip()
+        if not cell:
+            return np.nan
+        return float(cell.replace(",", ".") if decimal_comma else cell)
+
+    rows = [ln.split(sep) for ln in lines[1:]]
+    cols = {nm: np.array([num(r[j]) if j < len(r) else np.nan for r in rows])
+            for j, nm in enumerate(names)}
+    t = cols.pop(names[0]) * _TIME_UNITS[unit]
+    return t, cols
+
+
+def load_leica_csv(source, frap_roi="ROI1", reference_roi=None,
+                   background_roi=None, channel=1, pattern="*.csv", **_):
+    """Load LAS X Quantify ROI exports into the all_data contract.
+
+    ``source`` is one exported CSV or a directory of them, one per replicate.
+    Unlike ImageJ tables (:func:`load_roi_csv`) these carry the acquisition
+    timestamps, so no timing has to be supplied and none is assumed.
+
+    The bleach is placed where the file records it. LAS X leaves the ROI cells
+    empty on the bleach-pulse frames, so the first measured frame after that
+    gap is the first post-bleach frame and becomes t = 0, the same origin the
+    .lif route uses. Only when a file has no gap is the bleach detected from
+    the trace, by the criterion :func:`core.detect_bleach_index` applies.
+
+    Normalisation depends on what was exported:
+
+    * ``reference_roi`` and ``background_roi`` given: double normalisation,
+      identical to the .lif route. Provenance ``leica_csv``.
+    * neither given (one ROI per file): single normalisation to the pre-bleach
+      mean. Acquisition photobleaching is then NOT corrected, which lowers the
+      apparent plateau and so the mobile fraction, by an amount that grows with
+      the number of post-bleach frames. Provenance ``leica_csv_single``, so a
+      comparison against double-normalised conditions raises the provenance
+      warning instead of passing silently.
+
+    Supplying only one of the two is accepted. A background without a reference
+    is subtracted before single normalisation; a reference without a background
+    is used uncorrected for offset, which is what LAS X reports when no
+    background ROI was drawn.
+    """
+    from .core import detect_bleach_index
+
+    src = Path(source)
+    files = sorted(src.glob(pattern), key=_natural_key) if src.is_dir() else [src]
+    if not files:
+        raise FileNotFoundError(f"no files matching {pattern!r} in {src}")
+    double = reference_roi is not None
+    prov = "leica_csv" if double else "leica_csv_single"
+    print(f"  [leica_csv] {len(files)} file(s) in {src.name}: "
+          f"{'double' if double else 'single'} normalisation"
+          + ("" if double else " (no reference ROI: acquisition photobleaching "
+                               "is not corrected)"))
+
+    all_data = []
+    for fp in files:
+        t, cols = _read_leica_quantify(fp, channel=channel)
+        need = [frap_roi] + [r for r in (reference_roi, background_roi) if r]
+        missing = [r for r in need if r not in cols]
+        if missing:
+            raise KeyError(f"{fp.name}: ROI {missing} not in export; "
+                           f"available: {sorted(cols)}")
+        frap = cols[frap_roi]
+        ok = np.isfinite(t) & np.isfinite(frap)
+        for r in (reference_roi, background_roi):
+            if r:
+                ok &= np.isfinite(cols[r])
+
+        # Bleach = first measured frame after the first run of unmeasured ones.
+        idx = np.flatnonzero(ok)
+        gaps = np.flatnonzero(np.diff(idx) > 1)
+        if idx.size == 0:
+            print(f"  [leica_csv] {fp.name}: no measured frames, skipped")
+            continue
+        n_gap = 0
+        if gaps.size:
+            k = int(gaps[0]) + 1                         # index into idx
+            n_gap = int(idx[gaps[0] + 1] - idx[gaps[0]] - 1)
+        else:
+            k = int(detect_bleach_index(frap[idx]))
+
+        t, frap = t[idx], frap[idx]
+        bg = cols[background_roi][idx] if background_roi else np.zeros_like(frap)
+        fc = frap - bg
+        if k < 1 or frap.size - k < 2:
+            print(f"  [leica_csv] {fp.name}: {k} pre-bleach and {frap.size - k} "
+                  f"post-bleach frames; needs at least 1 and 2, skipped")
+            continue
+        roi_pre = float(np.mean(fc[:k]))
+        if roi_pre <= 0:
+            print(f"  [leica_csv] {fp.name}: pre-bleach ROI mean <= 0 after "
+                  f"background subtraction, skipped")
+            continue
+        if double:
+            refc = cols[reference_roi][idx] - bg
+            inten = (float(np.mean(refc[:k])) / refc) * (fc / roi_pre)
+        else:
+            inten = fc / roi_pre
+
+        f_min = float(inten[k])
+        tail = inten[k:][-max(1, (inten.size - k) // 5):]
+        bd = 100.0 * (1.0 - f_min / float(np.mean(inten[:k])))
+        mf = 100.0 * (float(np.mean(tail)) - f_min) / (1.0 - f_min) if f_min < 1 else np.nan
+        flag = ""
+        if np.isfinite(mf) and mf < 0:
+            flag = "  <-- signal FALLS after the bleach"
+        elif np.isfinite(mf) and mf > 100:
+            flag = "  <-- above pre-bleach (excluded downstream)"
+        print(f"  [leica_csv] {fp.stem}: {k} pre, {n_gap} bleach, "
+              f"{inten.size - k} post frames; depth {bd:.0f} %, "
+              f"apparent MF {mf:.0f} %{flag}")
+
+        all_data.append(dict(file=fp.stem, time=t - t[k], intensity=inten,
+                             intensity_raw=frap, centre=None, provenance=prov,
+                             bleach_at_t0=n_gap > 0))
     return all_data
 
 
@@ -392,6 +623,7 @@ def load_image_digitized(source, x_range=(0, 60), y_range=(0, 250), **_):
 
 LOADER_REGISTRY = {
     "lif": load_lif,
+    "leica_csv": load_leica_csv,
     "roi_csv": load_roi_csv,
     "image_digitized": load_image_digitized,
 }

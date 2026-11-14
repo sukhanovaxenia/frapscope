@@ -51,8 +51,30 @@ frapscope --out results/ --stats-control eS28 --stats-exclude GFP --no-harmonise
 | `--harmonise-dt` | resample to a fixed frame interval |
 | `--min-coverage` | fraction of replicates a common window must span (default 0.75) |
 
-Conditions are declared in `config.py` as `Condition` objects: an identifier, a
-path, a loader route (`lif`, `roi_csv` or `image_digitized`) and a display label.
+Conditions are declared in a config file as `Condition` objects: an identifier,
+a path, a loader route and a display label. Relative paths resolve against the
+config file's own folder.
+
+| loader | reads | normalisation |
+|---|---|---|
+| `lif` | a Leica `.lif`, or a folder of them | double, from the image |
+| `leica_csv` | LAS X Quantify ROI exports (`Channel 1` / `Axis [s];ROI1 []`), one CSV per replicate; both `;`/decimal-comma and `,`/decimal-point dialects | double with `reference_roi` and `background_roi`; otherwise single |
+| `roi_csv` | ImageJ Multi Measure tables plus supplied frame times | double |
+| `image_digitized` | rendered plot images (deprecated, lossy) | approximate |
+
+A LAS X export with one ROI per file has no reference region, so acquisition
+photobleaching is not corrected and the mobile fraction is biased low. Export a
+whole-cell reference and a background ROI alongside the bleached one and pass
+their names:
+
+```python
+Condition(display="eS12", loader="leica_csv", source="eS12",
+          loader_kwargs=dict(reference_roi="ROI2", background_roi="ROI3"))
+```
+
+The bleach in a LAS X export is read from the file: the ROI cells are empty on
+the bleach-pulse frames, and the first measured frame after them is t = 0. It is
+not re-detected downstream (`core.bleach_index`).
 
 ## Five decisions that change the numbers
 
@@ -117,11 +139,11 @@ the published values from derived data, see `docs/reproducing.md`.
 ## Tests
 
 ```bash
-pytest                         # all 35
+pytest                         # all 46
 pytest -m "not integration"    # the 23 that need no fixture data
 ```
 
-Thirty-five tests in two layers, in two files, kept apart deliberately. `test_regressions.py` checks functions in
+Forty-six tests: two layers in two files kept apart deliberately, and the loader tests in `test_leica_csv.py`. `test_regressions.py` checks functions in
 isolation — each corresponds to a fault that reached a reported number, and each
 fails against the implementation that produced the wrong answer. `test_pipeline.py`
 checks that the stages agree with one another, by putting a known mobile fraction
