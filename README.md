@@ -139,11 +139,11 @@ the published values from derived data, see `docs/reproducing.md`.
 ## Tests
 
 ```bash
-pytest                         # all 46
+pytest                         # all 47
 pytest -m "not integration"    # the 23 that need no fixture data
 ```
 
-Forty-six tests: two layers in two files kept apart deliberately, and the loader tests in `test_leica_csv.py`. `test_regressions.py` checks functions in
+Forty-seven tests: two layers in two files kept apart deliberately, and the loader tests in `test_leica_csv.py`. `test_regressions.py` checks functions in
 isolation — each corresponds to a fault that reached a reported number, and each
 fails against the implementation that produced the wrong answer. `test_pipeline.py`
 checks that the stages agree with one another, by putting a known mobile fraction

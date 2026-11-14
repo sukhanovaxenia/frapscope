@@ -224,3 +224,12 @@ class TestPlateauWindow:
         coarse = np.arange(0, 50.1, 8.0)
         ratio = self.frames_seconds(coarse) / self.frames_seconds(fine)
         assert ratio > 2.5      # the same three frames span very different times
+
+
+def test_comparison_styles_cover_any_number_of_conditions():
+    """Nine conditions crashed the overlay: the palettes held eight."""
+    from frapscope.viz import comparison_styles
+    for n in (1, 9, 12, 13, 30):
+        colors, markers = comparison_styles(n)
+        assert len(colors) == len(markers) == n
+        assert len(set(zip(colors, markers, strict=True))) == n

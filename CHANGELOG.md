@@ -20,6 +20,10 @@ A release that changes a number a previous version reported opens with a
 
 ### Fixed
 
+- The comparison overlay failed with `IndexError` for more than eight
+  conditions: the colour and marker palettes held eight and were sliced to
+  the condition count. Palettes now hold twelve, and `viz.comparison_styles`
+  cycles beyond that without repeating a colour-marker pair.
 - `load_lif` accepted only a file, while the configuration documents a folder
   of archives and the example config passes one; a folder failed as "loader
   failed". A folder now loads every `.lif` in it, with replicate names prefixed

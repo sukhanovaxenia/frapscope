@@ -54,8 +54,26 @@ from .core import (
 )
 
 COMPARISON_COLORS = ['#2196F3', '#4CAF50', '#FF9800', '#E8505B',
-                     '#9C27B0', '#00BCD4', '#795548', '#607D8B']
-COMPARISON_MARKERS = ['o', 's', '^', 'D', 'v', 'P', 'X', 'h']
+                     '#9C27B0', '#00BCD4', '#795548', '#607D8B',
+                     '#3F51B5', '#CDDC39', '#F06292', '#FFC107']
+COMPARISON_MARKERS = ['o', 's', '^', 'D', 'v', 'P', 'X', 'h', '<', '>', 'p', '*']
+
+
+def comparison_styles(n):
+    """Colour and marker for each of ``n`` conditions, every pair distinct.
+
+    Slicing the palettes to ``n`` silently returned fewer entries than
+    conditions once a config listed more of them than the palettes held, and
+    the comparison overlay then failed with IndexError on the first condition
+    past the end. Cycling both lists in step would not fail but would repeat
+    pairs, giving two conditions the same line on the same axes. The marker
+    index is therefore advanced by one on each pass through the colours, so a
+    colour that recurs always recurs with a different marker.
+    """
+    nc, nm = len(COMPARISON_COLORS), len(COMPARISON_MARKERS)
+    colors = [COMPARISON_COLORS[i % nc] for i in range(n)]
+    markers = [COMPARISON_MARKERS[(i + i // nc) % nm] for i in range(n)]
+    return colors, markers
 
 PLOT_MODES = ("postbleach", "gapped", "full")
 
@@ -253,7 +271,7 @@ def compare_conditions(summaries, output_dir, bleach_time=0.0, n_pre=3, n_plat=3
     applied there and are directly comparable on one axis."""
     output_dir = Path(output_dir); output_dir.mkdir(parents=True, exist_ok=True)
     names = list(summaries.keys()); n = len(names)
-    colors = COMPARISON_COLORS[:n]; markers = COMPARISON_MARKERS[:n]
+    colors, markers = comparison_styles(n)
 
     provs = {nm: tuple(summaries[nm].get('provenance', ['?'])) for nm in names}
     distinct = {p for tup in provs.values() for p in tup}
