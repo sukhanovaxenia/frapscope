@@ -507,6 +507,53 @@ def replicate_metrics(all_data, n_plat=3, n_pre=3, plat_frac=0.2,
                 f_plat=float(np.mean(plats)) if plats else np.nan)
 
 
+def replicate_table(all_data, n_plat=3, n_pre=3, plat_frac=0.2,
+                    max_mf=100.0, min_fit_points=5):
+    """One row per replicate: the quantities :func:`replicate_metrics` pools.
+
+    Same bleach frame, same pre-bleach and plateau definitions, same exclusions
+    (no bleach, or recovery above the pre-bleach ceiling), so the mobile
+    fractions and bleach depths here are exactly the ones behind a run's summary
+    table -- only no longer averaged, which is what a test between two sets of
+    replicates needs.
+
+    ``t_half`` comes from the single-exponential fit and is NaN when the fit
+    fails, when tau reaches its upper bound (the recovery is too slow for the
+    window to identify it), or when fewer than ``min_fit_points`` post-bleach
+    samples are available: three parameters fitted to three points describe
+    the points, not the recovery.
+    """
+    rows = []
+    for d in all_data:
+        t = np.asarray(d["time"], float)
+        y = np.asarray(d["intensity"], float)
+        i = bleach_index(d)
+        pre, post = y[:i], y[i:]
+        if pre.size == 0 or post.size == 0:
+            continue
+        f_pre = float(np.nanmean(pre[: min(n_pre, pre.size)]))
+        f_min = float(post[0])
+        f_plat = _plateau_level(t[i:], post, n_plat=n_plat, plat_frac=plat_frac)
+        if (f_pre - f_min) <= 0:
+            continue
+        mf = (f_plat - f_min) / (f_pre - f_min) * 100
+        if mf > max_mf:
+            continue
+        t_half = np.nan
+        if post.size >= min_fit_points:
+            fit = fit_frap_curve(t, y, bleach_time=float(t[i]))
+            if fit and not fit["tau_at_bound"]:
+                t_half = float(fit["t_half"])
+        rows.append(dict(file=d.get("file", "?"),
+                         provenance=d.get("provenance", "?"),
+                         mobile_fraction=float(mf),
+                         bleach_depth=float((f_pre - f_min) / f_pre * 100),
+                         t_half=t_half,
+                         n_post=int(post.size),
+                         window_s=float(t[-1] - t[i])))
+    return rows
+
+
 def compute_metrics(summary, n_pre=3, n_plat=3):
     """Condition-level bleach depth and mobile/immobile fraction.
 

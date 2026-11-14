@@ -91,6 +91,33 @@ def _mwu(a: np.ndarray, b: np.ndarray) -> tuple[float, float]:
     return float(r.statistic), float(r.pvalue)
 
 
+def bh(pvals: Sequence[float]) -> np.ndarray:
+    """Benjamini-Hochberg adjusted p-values (q-values), order preserved.
+
+    Controls the expected proportion of false discoveries among the rejected
+    hypotheses, not the probability of any false rejection. That is the right
+    guarantee for a screen -- many conditions times many metrics, where the
+    question is which differences are worth following up -- and the wrong one
+    for the handful of planned contrasts a paper's conclusion rests on, which
+    keep Holm. Non-finite p-values are passed through as NaN and do not count
+    towards the family size: an untestable cell is not a test.
+    """
+    p = np.asarray(pvals, float)
+    q = np.full(p.shape, np.nan)
+    ok = np.isfinite(p)
+    m = int(ok.sum())
+    if m == 0:
+        return q
+    pv = p[ok]
+    order = np.argsort(pv)
+    ranked = pv[order] * m / np.arange(1, m + 1)
+    adj = np.minimum.accumulate(ranked[::-1])[::-1]
+    out = np.empty(m)
+    out[order] = np.clip(adj, 0.0, 1.0)
+    q[ok] = out
+    return q
+
+
 def _min_p(na: int, nb: int) -> float:
     """Smallest two-sided p the exact Mann-Whitney null can return at this n."""
     from math import comb

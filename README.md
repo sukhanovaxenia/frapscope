@@ -76,6 +76,36 @@ The bleach in a LAS X export is read from the file: the ROI cells are empty on
 the bleach-pulse frames, and the first measured frame after them is t = 0. It is
 not re-detected downstream (`core.bleach_index`).
 
+## Comparing two runs
+
+`frapscope-compare` asks whether a second run of the panel reproduces the first:
+another session, another extraction route, or both. Each run is a config file;
+both are re-extracted and reduced to per-replicate mobile fraction, bleach depth
+and t½ by the same steps `frapscope` uses.
+
+```bash
+frapscope-compare --config-a old.py --config-b new.py \
+    --label-a "Aug 2026 (.lif)" --label-b "Nov 2026 (LAS X CSV)" \
+    --map eL42=eL36 --exclude GFP --out crossrun/
+```
+
+| question | unit of analysis | statistic | correction |
+|---|---|---|---|
+| has a condition shifted? | replicates, A vs B | exact two-sample Kolmogorov-Smirnov (D); median shift; rank-biserial r | Benjamini-Hochberg over conditions × metrics |
+| is the pattern across conditions kept? | condition medians | exact permutation Spearman ρ (with its p floor); Lin's concordance (CCC); OLS slope with 95 % CI; bootstrap CIs over replicates | Benjamini-Hochberg over metrics |
+
+KS D is a distance between two distributions, not a correlation. CCC differs from
+a correlation in reaching 1 only when B equals A, not merely when B rises with A.
+With k conditions the exact Spearman test cannot go below 2/k! (0.083 for four),
+which the output states. Each pair is truncated to its shorter observation
+window unless `--window native` is given, because the mobile fraction grows with
+the window. Where the extraction route differs between runs, run and route are
+confounded and the report says so.
+
+Outputs: `crossrun_{replicates,pairs,distribution_tests,cross_condition}.csv`,
+`crossrun_report.txt`, and four figures — shift heatmap, pattern heatmap,
+regression panels, per-replicate distributions.
+
 ## Five decisions that change the numbers
 
 These are documented here rather than buried in the source because each was a
@@ -139,11 +169,11 @@ the published values from derived data, see `docs/reproducing.md`.
 ## Tests
 
 ```bash
-pytest                         # all 47
+pytest                         # all 58
 pytest -m "not integration"    # the 23 that need no fixture data
 ```
 
-Forty-seven tests: two layers in two files kept apart deliberately, and the loader tests in `test_leica_csv.py`. `test_regressions.py` checks functions in
+Fifty-eight tests: two layers in two files kept apart deliberately, the loader tests in `test_leica_csv.py`, and the run comparison in `test_crossrun.py`. `test_regressions.py` checks functions in
 isolation — each corresponds to a fault that reached a reported number, and each
 fails against the implementation that produced the wrong answer. `test_pipeline.py`
 checks that the stages agree with one another, by putting a known mobile fraction

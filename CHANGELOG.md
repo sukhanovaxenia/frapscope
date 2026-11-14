@@ -10,6 +10,16 @@ A release that changes a number a previous version reported opens with a
 
 ### Added
 
+- `frapscope-compare` (`crossrun.py`): compares two runs of a panel from their
+  configs. Per condition and metric, an exact two-sample KS test with median
+  shift and rank-biserial r; across conditions, exact permutation Spearman ρ
+  with its attainable floor, Lin's CCC, OLS slope with CI, and bootstrap CIs
+  over replicates. Benjamini-Hochberg within each family. Matched observation
+  windows by default. Shift and pattern heatmaps, regression panels,
+  per-replicate distributions, CSV tables and a text report.
+- `stats.bh`: Benjamini-Hochberg q-values.
+- `core.replicate_table`: per-replicate mobile fraction, bleach depth and t½,
+  with the same definitions and exclusions as `replicate_metrics`.
 - `leica_csv` loader for LAS X Quantify ROI exports, for acquisitions whose
   `.lif` was not kept. Reads both regional dialects, takes timestamps from the
   file, and places the bleach at the frames LAS X leaves unmeasured. Double

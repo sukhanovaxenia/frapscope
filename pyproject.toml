@@ -36,6 +36,7 @@ dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
 
 [project.scripts]
 frapscope = "frapscope.cli:main"
+frapscope-compare = "frapscope.crossrun:main"
 
 [project.urls]
 Homepage = "https://github.com/sukhanovaxenia/frapscope"
