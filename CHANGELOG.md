@@ -10,6 +10,19 @@ A release that changes a number a previous version reported opens with a
 
 ### Added
 
+- `stats.correlate_with_covariate` and `viz.plot_covariate_scatter`
+  (`--covariate`): rank correlation between a per-condition number measured
+  outside the pipeline — predicted aggregation-prone regions, expression
+  level, days post-transfection — and a FRAP metric. Exact permutation
+  Spearman ρ, the smallest p the design admits, a leave-one-out check that
+  names any condition one replicate can move further than the panel spans and
+  recomputes the correlation without it, and the same test on medians.
+  `--covariate-reference` keeps a control on the figure and out of the
+  correlation. Labels are placed by collision search rather than by hand.
+- `--stats-control` accepts several controls, each corrected as its own Holm
+  family and written to `mobile_fraction_stats_vs_<control>.csv`.
+- `examples/covariate_ribosomal.csv`: consensus APR counts for the ribosomal
+  panel.
 - `frapscope-compare` (`crossrun.py`): compares two runs of a panel from their
   configs. Per condition and metric, an exact two-sample KS test with median
   shift and rank-biserial r; across conditions, exact permutation Spearman ρ
@@ -27,6 +40,12 @@ A release that changes a number a previous version reported opens with a
   otherwise, with distinct provenance so mixed comparisons are flagged.
 - `core.bleach_index(record)`: uses the loader's bleach when the record carries
   `bleach_at_t0`, and `detect_bleach_index` otherwise.
+
+### Changed
+
+- `stats.spearman_exact` moved from `crossrun` to `stats`, where both callers
+  can reach it. `crossrun.spearman_exact` still resolves to it.
+- `stats.compare_mobile_fractions` takes `out_name`.
 
 ### Fixed
 

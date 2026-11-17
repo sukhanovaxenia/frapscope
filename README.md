@@ -76,6 +76,37 @@ The bleach in a LAS X export is read from the file: the ROI cells are empty on
 the bleach-pulse frames, and the first measured frame after them is t = 0. It is
 not re-detected downstream (`core.bleach_index`).
 
+## Correlating with something measured elsewhere
+
+Does a FRAP metric track a number that came from outside this pipeline —
+predicted aggregation-prone regions, expression level, construct length, days
+post-transfection?
+
+    frapscope --config examples/config_ribosomal.py --out results/ \
+        --covariate examples/covariate_ribosomal.csv \
+        --covariate-label "consensus APR regions" \
+        --covariate-reference GFP
+
+The unit of analysis is the condition, so k is the number of conditions, and
+three things follow that the output states rather than leaves to the reader.
+
+The p-value has a floor. With k conditions there are k! orderings and ties in
+the covariate collapse some of them, so the smallest attainable two-sided p can
+sit above 0.05 — at k = 4 it is 0.083, and no arrangement of the data could
+have been significant. The floor is printed next to p and written on the
+figure.
+
+One replicate can decide where a condition sits. Each condition's leave-one-out
+influence is computed, and a condition that a single replicate moves further
+than the whole panel spans is flagged, drawn twice on the figure, and the
+correlation is recomputed without that replicate. In FRAP such a replicate is
+usually a cell whose bleach failed: its mobile fraction is a ratio with a
+near-zero denominator and can reach hundreds of percent either way.
+
+The p-value is exact. `scipy.stats.spearmanr` returns an asymptotic p from a
+t-distribution; at k = 6 that differs from the permutation p in the second
+decimal.
+
 ## Comparing two runs
 
 `frapscope-compare` asks whether a second run of the panel reproduces the first:

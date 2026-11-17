@@ -28,14 +28,19 @@ from pathlib import Path
 
 from .core import drop_supraceiling
 from .loaders import LOADER_REGISTRY
-from .stats import compare_mobile_fractions
+from .stats import compare_mobile_fractions, correlate_with_covariate
 from .timebase import (
     acquisition_report,
     harmonise,
     invariance_report,
     sampling_bias_report,
 )
-from .viz import compare_conditions, plot_frap_summary, plot_intensity_raw
+from .viz import (
+    compare_conditions,
+    plot_covariate_scatter,
+    plot_frap_summary,
+    plot_intensity_raw,
+)
 
 __all__ = ["build_all_data", "run"]
 
@@ -75,7 +80,10 @@ def _load_all(conditions):
 def run(conditions, out_base, bleach_time=0.0, n_pre=3, n_plat=3,
         plot_mode="postbleach", renormalise=True, min_coverage=0.75,
         harmonise_comparison=True, harmonise_dt=None,
-        stats_control=None, stats_exclude=()):
+        stats_control=None, stats_exclude=(),
+        covariate=None, covariate_label="covariate",
+        covariate_metrics=("mobile_fraction",), covariate_reference=None,
+        covariate_estimator="mean"):
     """Full pipeline: load -> audit -> per-condition figures -> comparison.
 
     Parameters
@@ -94,6 +102,19 @@ def run(conditions, out_base, bleach_time=0.0, n_pre=3, n_plat=3,
         point for it to be plotted. 0.75 keeps the tail of a mean curve from
         being drawn by a minority of replicates with an artificially collapsed
         SEM.
+    stats_control : str, sequence of str, or None
+        Condition(s) every other condition is tested against. More than one
+        control means more than one Holm family, each corrected on its own and
+        written to its own CSV -- a free-fluorophore control and a
+        within-class reference answer different questions and correcting them
+        together would treat them as one.
+    covariate : dict or None
+        Per-condition numbers measured outside this pipeline, correlated with
+        each metric in ``covariate_metrics``. The pipeline stays ignorant of
+        what they mean; see ``stats.correlate_with_covariate``.
+    covariate_reference : str or None
+        Condition drawn on the covariate figure as a horizontal band and kept
+        out of the correlation -- a control with no covariate value of its own.
     """
     out_base = Path(out_base)
     out_base.mkdir(parents=True, exist_ok=True)
@@ -183,11 +204,35 @@ def run(conditions, out_base, bleach_time=0.0, n_pre=3, n_plat=3,
                     _s["common_window_s"] = W
 
         if len(cmp_summaries) >= 2:
-            compare_conditions(cmp_summaries, out_base / "comparison",
+            cmp_dir = out_base / "comparison"
+            compare_conditions(cmp_summaries, cmp_dir,
                                bleach_time, n_pre, n_plat, plot_mode)
-            compare_mobile_fractions(cmp_summaries, out_base / "comparison",
-                                     control=stats_control,
-                                     exclude=stats_exclude)
+            controls = ([stats_control] if stats_control is None
+                        or isinstance(stats_control, str)
+                        else list(stats_control)) or [None]
+            for ctrl in controls:
+                name = ("mobile_fraction_stats.csv" if len(controls) == 1
+                        else f"mobile_fraction_stats_vs_{ctrl}.csv")
+                if len(controls) > 1:
+                    print(f"\n--- contrasts against {ctrl} "
+                          "(its own Holm family) ---")
+                compare_mobile_fractions(cmp_summaries, cmp_dir, control=ctrl,
+                                         exclude=stats_exclude, out_name=name)
+            if covariate:
+                for metric in covariate_metrics:
+                    res = correlate_with_covariate(
+                        cmp_summaries, covariate, metric=metric,
+                        estimator=covariate_estimator,
+                        exclude=stats_exclude,
+                        reference=covariate_reference,
+                        out_dir=cmp_dir, label=covariate_label)
+                    if res["n"] >= 2:
+                        plot_covariate_scatter(
+                            cmp_summaries, covariate, cmp_dir, metric=metric,
+                            estimator=covariate_estimator,
+                            reference=covariate_reference,
+                            exclude=stats_exclude, label=covariate_label,
+                            result=res)
         summaries = {"native": summaries, "comparison": cmp_summaries}
 
     return summaries

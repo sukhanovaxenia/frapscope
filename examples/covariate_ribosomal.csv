@@ -1,0 +1,13 @@
+# Consensus amyloidogenic regions per protein: positions called by at least
+# 6 of 12 predictors in the amyloscope panel, counted as contiguous regions.
+# Produced outside frapscope; see the hRPs analysis for how the panel is built.
+# eL42 is absent because its FRAP series stops at 53.5 s and does not enter
+# the harmonised comparison; GFP is absent because the covariate has no
+# meaning for it (pass it as --covariate-reference instead).
+condition,consensus_regions
+eS2,5
+eL27,3
+eS12,3
+eS13,3
+eL36,0
+eS28,0

@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import itertools
 from pathlib import Path
 
 import numpy as np
@@ -48,7 +47,7 @@ from scipy import stats as st
 
 from .config import ConfigError, load_conditions
 from .core import drop_supraceiling, replicate_table
-from .stats import _min_p, bh
+from .stats import _min_p, bh, spearman_exact
 from .timebase import condition_window, truncate
 
 METRICS = {
@@ -112,42 +111,6 @@ def ks_exact(a, b):
         return np.nan, np.nan
     r = st.ks_2samp(a, b, alternative="two-sided", method="exact")
     return float(r.statistic), float(r.pvalue)
-
-
-def spearman_exact(x, y, max_exact=9, n_mc=200_000, seed=0):
-    """Spearman rho, its permutation p-value, and the smallest attainable p.
-
-    With k points the null distribution has k! equally likely orderings, so the
-    p-value has a floor: 2/24 = 0.083 for k = 4 without ties. A rho of 1.0 at
-    k = 4 is therefore not significant at 0.05 however it is computed, and the
-    floor is reported so that this reads as a property of the design rather
-    than of the data. Exact enumeration up to ``max_exact`` points, Monte Carlo
-    beyond.
-    """
-    x, y = np.asarray(x, float), np.asarray(y, float)
-    k = x.size
-    if k < 3:
-        return np.nan, np.nan, np.nan
-    rx, ry = st.rankdata(x), st.rankdata(y)
-    if np.ptp(rx) == 0 or np.ptp(ry) == 0:
-        return np.nan, np.nan, np.nan
-
-    def corr(perm_y):
-        a = rx - rx.mean()
-        b = perm_y - perm_y.mean(axis=-1, keepdims=True)
-        return (b @ a) / np.sqrt((a @ a) * np.sum(b * b, axis=-1))
-
-    rho = float(corr(ry[None, :])[0])
-    if k <= max_exact:
-        perms = np.array(list(itertools.permutations(range(k))))
-    else:
-        rng = np.random.default_rng(seed)
-        perms = np.array([rng.permutation(k) for _ in range(n_mc)])
-    null = np.abs(corr(ry[perms]))
-    eps = 1e-12
-    p = float(np.mean(null >= abs(rho) - eps))
-    floor = float(np.mean(null >= null.max() - eps))
-    return rho, p, floor
 
 
 def lin_ccc(x, y):

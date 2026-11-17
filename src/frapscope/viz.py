@@ -407,3 +407,196 @@ def compare_conditions(summaries, output_dir, bleach_time=0.0, n_pre=3, n_plat=3
     with open(output_dir / 'comparison_summary.csv', 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=rows[0].keys()); w.writeheader(); w.writerows(rows)
     return metrics
+
+
+# ------------------------------------------------------ covariate scatter ---
+
+#: Offsets tried, in order, when a label has to go somewhere that is free.
+_LABEL_CANDIDATES = ((13, -4), (13, 7), (-13, -4), (-13, 7), (13, -17),
+                     (-13, -17), (0, 13), (0, -24), (22, 13), (-22, -24))
+
+
+def _jitter_ties(values, width=0.24):
+    """Spread conditions sharing an x value, so their labels can be told apart.
+
+    A covariate that counts something -- predicted regions, passages, days --
+    puts several conditions on the same abscissa, where markers and error bars
+    overlap exactly and the panel reads as fewer points than it has. The jitter
+    is cosmetic and never enters the statistics, which are computed on the
+    untouched values in :func:`frapscope.stats.correlate_with_covariate`.
+    """
+    v = np.asarray(values, float)
+    out = v.copy()
+    for value in np.unique(v):
+        idx = np.flatnonzero(v == value)
+        if idx.size > 1:
+            out[idx] = value + np.linspace(-width, width, idx.size)
+    return out
+
+
+def _place_labels(ax, items, avoid, fontsize=10):
+    """Annotate each point at the first candidate offset that collides with nothing.
+
+    Hand-tuned offsets are the usual way to do this and they are wrong the
+    moment a condition is added, a value changes, or the panel is re-run on
+    another dataset -- the figure still renders, so the overlap is found by
+    eye, late, or not at all. Candidates are tried in a fixed order and the
+    first clear one wins, which makes the placement deterministic.
+    """
+    fig = ax.figure
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    frame = ax.get_window_extent(renderer=renderer)
+    occupied = list(avoid)
+    placed = []
+    for x, y, text, colour in items:
+        chosen, fallback = None, None
+        for dx, dy in _LABEL_CANDIDATES:
+            ann = ax.annotate(text, (x, y), textcoords="offset points",
+                              xytext=(dx, dy),
+                              ha="left" if dx >= 0 else "right",
+                              fontsize=fontsize, color=colour, zorder=6)
+            bb = ann.get_window_extent(renderer=renderer).expanded(1.06, 1.25)
+            if fallback is None:
+                fallback = (ann, bb)
+            inside = frame.contains(bb.x0, bb.y0) and frame.contains(bb.x1, bb.y1)
+            if inside and not any(bb.overlaps(o) for o in occupied):
+                chosen = (ann, bb)
+                break
+            if chosen is None and (ann, bb) != fallback:
+                ann.remove()
+        if chosen is None:
+            chosen = fallback
+        elif fallback[0] is not chosen[0]:
+            # compare the artists, not the tuples: a label accepted at the
+            # first candidate has `chosen` and `fallback` as two equal tuples
+            # holding one Text, and `is not` on the tuples removed it
+            fallback[0].remove()
+        occupied.append(chosen[1])
+        placed.append(chosen[0])
+    return placed
+
+
+def plot_covariate_scatter(summaries, covariate, output_dir,
+                           metric="mobile_fraction", estimator="mean",
+                           reference=None, exclude=(), label="covariate",
+                           result=None, xlabel=None, ylabel=None, title=None,
+                           stem=None):
+    """One point per condition: an external covariate against a FRAP metric.
+
+    The figure carries what the test carries, so the two cannot drift apart:
+    rho, the exact permutation p-value and the smallest p the design admits are
+    written above the axes, and a condition that one replicate can move further
+    than the panel spans is drawn twice -- filled where it is reported, open
+    where it would sit without that replicate, joined by a dotted line. That
+    second marker is the one piece of this plot that is not decoration: it
+    shows, without a caption, how much of the panel's ordering rests on a
+    single cell.
+
+    ``reference`` names a condition drawn as a horizontal band rather than a
+    point. It is excluded from the correlation by
+    :func:`frapscope.stats.correlate_with_covariate`.
+    """
+    from .stats import COVARIATE_METRICS, correlate_with_covariate
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _, metric_label, unit = COVARIATE_METRICS[metric]
+    key = COVARIATE_METRICS[metric][0]
+
+    if result is None:
+        result = correlate_with_covariate(
+            summaries, covariate, metric=metric, estimator=estimator,
+            exclude=exclude, reference=reference, label=label)
+    rows = result["rows"]
+    if len(rows) < 2:
+        print("  [covariate] fewer than two points to plot")
+        return None
+
+    fragile = {r["condition"] for r in rows if r.get("fragile")}
+
+    fig, ax = plt.subplots(figsize=(7.6, 5.2))
+
+    # reference condition as a band, not a point
+    ref_level = None
+    if reference and reference in summaries:
+        rv = np.asarray(summaries[reference].get(key, []), float)
+        rv = rv[np.isfinite(rv)]
+        if rv.size:
+            m, sd = float(rv.mean()), float(rv.std(ddof=1)) if rv.size > 1 else 0.0
+            ax.axhspan(m - sd, m + sd, color="#C5CAE9", alpha=0.55, zorder=0)
+            ax.axhline(m, color="#3F51B5", ls="--", lw=1.3, zorder=1,
+                       label=f"{reference}: {m:.1f} ± {sd:.1f} {unit} (n={rv.size})")
+            ref_level = m
+
+    xs = _jitter_ties([r["covariate"] for r in rows])
+    ys = [r[estimator] for r in rows]
+    colors, _ = comparison_styles(len(rows))
+
+    for (r, x, y, c) in zip(rows, xs, ys, colors):
+        ax.errorbar(x, y, yerr=r["sd"], fmt="o", ms=9, color=c, ecolor=c,
+                    elinewidth=1.3, capsize=4, alpha=0.9, zorder=3)
+    first_alt = True
+    for (r, x, y, c) in zip(rows, xs, ys, colors):
+        if r["condition"] not in fragile:
+            continue
+        ax.plot([x, x], [y, r["loo_value"]], color=c, ls=":", lw=1.2, zorder=2)
+        ax.plot([x], [r["loo_value"]], marker="o", ms=9, mfc="white", mec=c,
+                mew=1.8, zorder=4,
+                label="without its most influential replicate"
+                if first_alt else None)
+        first_alt = False
+
+    ax.set_xlabel(xlabel or f"{label}")
+    ax.set_ylabel(ylabel or f"{metric_label} ({unit})")
+    vals = [r["covariate"] for r in rows]
+    if all(float(v).is_integer() for v in vals):
+        lo, hi = int(min(vals)), int(max(vals))
+        ax.set_xticks(range(lo, hi + 1))
+    ax.margins(x=0.18, y=0.12)
+    ax.grid(alpha=0.2, axis="y")
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    if ax.get_legend_handles_labels()[0]:
+        ax.legend(fontsize=9, loc="best", framealpha=0.85)
+
+    ax.set_title(title or f"{metric_label} vs {label}", pad=36)
+    sub = (f"Spearman rho = {result['rho']:+.2f}, exact p = {result['p']:.3f} "
+           f"(n = {result['n']}); smallest attainable p = {result['p_floor']:.3f}")
+    rob = result.get("robust")
+    if rob:
+        sub += (f"\nwithout the most influential replicate of "
+                f"{', '.join(rob['conditions'])}: rho = {rob['rho']:+.2f}, "
+                f"p = {rob['p']:.3f}")
+    ax.text(0.5, 1.022, sub, transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=9, color="#555555")
+
+    fig.tight_layout()
+
+    # labels last, once the axes have their final position
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    avoid = []
+    for r, x, y in zip(rows, xs, ys):
+        for yy in (y, r["loo_value"] if r["condition"] in fragile else y):
+            px, py = ax.transData.transform((x, yy))
+            avoid.append(matplotlib.transforms.Bbox.from_bounds(
+                px - 13, py - 13, 26, 26))
+    if ref_level is not None:
+        # the reference line runs the width of the axes; a label crossing it is
+        # legible but reads as if it belonged to the line
+        frame = ax.get_window_extent(renderer=renderer)
+        py = ax.transData.transform((0.0, ref_level))[1]
+        avoid.append(matplotlib.transforms.Bbox.from_bounds(
+            frame.x0, py - 7, frame.width, 14))
+    leg = ax.get_legend()
+    if leg is not None:
+        avoid.append(leg.get_window_extent(renderer=renderer))
+    _place_labels(ax, [(x, y, f"{r['condition']} (n={r['n']})", c)
+                       for r, x, y, c in zip(rows, xs, ys, colors)], avoid)
+
+    stem = stem or f"covariate_{metric}"
+    for ext in ["png", "svg"]:
+        fig.savefig(output_dir / f"{stem}.{ext}", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return result
